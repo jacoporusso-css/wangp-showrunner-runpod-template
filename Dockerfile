@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
-FROM ghcr.io/astral-sh/uv:0.9.5 AS uv
+FROM ghcr.io/astral-sh/uv:0.9.5@sha256:f459f6f73a8c4ef5d69f4e6fbbdb8af751d6fa40ec34b39a1ab469acd6e289b7 AS uv
 
-FROM runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404
+FROM runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404@sha256:0a360022e8de4375af99430f84e8b38951acc397252163a37ceac7204d01be35
 
 ARG WAN2GP_REPOSITORY=https://github.com/deepbeepmeep/Wan2GP.git
 ARG WAN2GP_COMMIT=9e25e36e50a073a99419d406d47c13088956f48c
@@ -59,12 +59,34 @@ RUN "${VIRTUAL_ENV}/bin/python" -m pip install --upgrade pip setuptools wheel \
       torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0 \
       --index-url https://download.pytorch.org/whl/cu128 \
  && "${VIRTUAL_ENV}/bin/python" -m pip install -r requirements.txt \
- && "${VIRTUAL_ENV}/bin/python" -m pip check \
  && "${VIRTUAL_ENV}/bin/python" - <<'PY'
-import gradio, torch
+import subprocess
+import sys
+
+result = subprocess.run(
+    [sys.executable, "-m", "pip", "check"],
+    text=True,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+)
+lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+# Upstream decord 0.6.0 marks Python 3.11 unsupported even though its
+# manylinux extension imports and is the revision-pinned WanGP dependency.
+allowed = {"decord 0.6.0 is not supported on this platform"}
+unexpected = [line for line in lines if line not in allowed]
+if unexpected or (result.returncode and not lines):
+    print(result.stdout, end="")
+    raise SystemExit(result.returncode or 1)
+if lines:
+    print("pip check allowlisted:", *lines, sep="\n")
+
+import decord
+import gradio
+import torch
+assert decord.__version__ == "0.6.0", decord.__version__
 assert gradio.__version__ == "5.29.0", gradio.__version__
 assert torch.__version__.startswith("2.10.0"), torch.__version__
-print("torch", torch.__version__, "gradio", gradio.__version__)
+print("torch", torch.__version__, "gradio", gradio.__version__, "decord", decord.__version__)
 PY
 
 ENV PATH="/opt/wan-venv/bin:${PATH}"

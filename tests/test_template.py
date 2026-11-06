@@ -16,6 +16,8 @@ class TemplateTests(unittest.TestCase):
         self.assertIn(f"ARG WAN2GP_COMMIT={PIN}", text)
         self.assertIn("runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404", text)
         self.assertIn("ghcr.io/astral-sh/uv:0.9.5", text)
+        self.assertIn("sha256:0a360022e8de4375af99430f84e8b38951acc397252163a37ceac7204d01be35", text)
+        self.assertIn("sha256:f459f6f73a8c4ef5d69f4e6fbbdb8af751d6fa40ec34b39a1ab469acd6e289b7", text)
         self.assertIn("uv python install 3.11.14", text)
         self.assertIn('assert gradio.__version__ == "5.29.0"', text)
         self.assertNotIn('ARG WAN2GP_COMMIT="main"', text)

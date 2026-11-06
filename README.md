@@ -9,6 +9,7 @@ It packages the exact WanGP revision and launch policy. It contains no song, lyr
 - WanGP commit: `9e25e36e50a073a99419d406d47c13088956f48c`
 - WanGP version at that revision: `19.13`
 - Base: official RunPod `runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404`
+- Base and uv installer images are pinned by OCI digest, not tag alone.
 - Application environment: uv-managed Python 3.11.14, Torch 2.10.0 with CUDA 12.8 wheels
 - Required Gradio: `5.29.0`
 - Image: `ghcr.io/jacoporusso-css/wangp-showrunner-runpod:latest`

@@ -46,6 +46,13 @@ def main() -> int:
         raise SystemExit("Missing template fields: " + ", ".join(missing))
     if payload["ports"] != ["7860/http"] or payload.get("startJupyter") or payload.get("startSsh"):
         raise SystemExit("Template must expose only 7860/http with Jupyter and automatic SSH disabled.")
+    image = payload.get("image", "")
+    if "@sha256:" not in image or image.endswith("@sha256:"):
+        raise SystemExit("Template image must use an immutable sha256 digest reference.")
+    if payload.get("public") is not False or payload.get("serverless") is not False:
+        raise SystemExit("Template must remain private and Pod-only (serverless=false).")
+    if payload.get("allowedCudaVersions") != ["12.8"]:
+        raise SystemExit("Template must remain pinned to CUDA 12.8 compatibility.")
     if args.check:
         print(json.dumps({"valid": True, "name": payload["name"], "image": payload["image"]}, indent=2))
         return 0

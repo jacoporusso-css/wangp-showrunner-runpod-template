@@ -14,6 +14,8 @@ It packages the exact WanGP revision and launch policy. It contains no song, lyr
 - Required Gradio: `5.29.0`
 - Image: `ghcr.io/jacoporusso-css/wangp-showrunner-runpod:latest`
 - Immutable release tag: `ghcr.io/jacoporusso-css/wangp-showrunner-runpod:wan19.13-9e25e36`
+- Published OCI index digest: `sha256:d4406549bddb9978475a4f9d327e48417f33a307cd96d823431377b14f20a62e`
+- The RunPod template uses the digest reference, not a mutable tag.
 
 ## Security and persistence
 
@@ -38,6 +40,14 @@ GitHub Actions runs static checks and publishes the image to GHCR on `main`. Tag
 - `sha-<commit>`
 
 The workflow publishes SBOM and provenance attestations. The package must be public for credential-free RunPod pulls; the image contains no private project data.
+
+Verified publication for commit `a90202216324f19663e55a1ddd2aaa6f31de7316`:
+
+- GitHub Actions run `42265611385`: successful;
+- anonymous GHCR manifest request: HTTP 200;
+- platform manifest: `linux/amd64`;
+- SPDX SBOM attestation: present;
+- SLSA provenance v1 attestation: present.
 
 ## RunPod template resource
 

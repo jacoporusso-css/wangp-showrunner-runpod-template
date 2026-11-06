@@ -1,0 +1,26 @@
+{
+  "name": "WanGP Showrunner H3 - Lamba Prototype",
+  "image": "ghcr.io/jacoporusso-css/wangp-showrunner-runpod:latest",
+  "category": "NVIDIA",
+  "allowedCudaVersions": [
+    "13.0"
+  ],
+  "disk": 30,
+  "ports": [
+    "7860/http"
+  ],
+  "env": {
+    "WAN2GP_PORT": "7860",
+    "PROJECT_ROOT": "/workspace/lamba-video"
+  },
+  "mounts": {
+    "persistent": {
+      "size": 300,
+      "path": "/workspace"
+    }
+  },
+  "serverless": false,
+  "public": false,
+  "startJupyter": false,
+  "startSsh": false
+}

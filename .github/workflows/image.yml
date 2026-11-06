@@ -1,0 +1,70 @@
+name: Build and publish RunPod image
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  attestations: write
+  id-token: write
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static tests
+        run: |
+          python3 -m unittest discover -s tests -v
+          bash -n entrypoint.sh
+          python3 -m py_compile healthcheck.py tests/test_template.py
+      - name: Validate base image and pinned source
+        run: |
+          docker manifest inspect pytorch/pytorch:2.10.0-cuda13.0-cudnn9-runtime >/dev/null
+          git init -q /tmp/wan
+          git -C /tmp/wan fetch --depth=1 https://github.com/deepbeepmeep/Wan2GP.git 9e25e36e50a073a99419d406d47c13088956f48c
+          test "$(git -C /tmp/wan rev-parse FETCH_HEAD)" = 9e25e36e50a073a99419d406d47c13088956f48c
+
+  build:
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free runner disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc || true
+          docker system prune -af || true
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/wangp-showrunner-runpod
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=wan19.13-9e25e36
+            type=sha
+      - uses: docker/build-push-action@v6
+        id: build
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
+      - name: Record immutable image digest
+        run: echo "${{ steps.build.outputs.digest }}"

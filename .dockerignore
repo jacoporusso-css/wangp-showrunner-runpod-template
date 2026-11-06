@@ -1,0 +1,8 @@
+.git
+.github
+README.md
+runpod-template.json
+scripts
+tests
+__pycache__
+*.pyc

@@ -3,7 +3,7 @@
   "image": "ghcr.io/jacoporusso-css/wangp-showrunner-runpod:latest",
   "category": "NVIDIA",
   "allowedCudaVersions": [
-    "13.0"
+    "12.8"
   ],
   "disk": 30,
   "ports": [

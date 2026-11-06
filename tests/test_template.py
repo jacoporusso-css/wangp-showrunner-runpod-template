@@ -14,7 +14,7 @@ class TemplateTests(unittest.TestCase):
     def test_dockerfile_is_pinned_and_authenticated(self):
         text = (ROOT / "Dockerfile").read_text(encoding="utf-8")
         self.assertIn(f"ARG WAN2GP_COMMIT={PIN}", text)
-        self.assertIn("pytorch/pytorch:2.10.0-cuda13.0-cudnn9-runtime", text)
+        self.assertIn("runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404", text)
         self.assertIn('assert gradio.__version__ == "5.29.0"', text)
         self.assertNotIn('ARG WAN2GP_COMMIT="main"', text)
         self.assertNotIn("gradio==4.44.1", text)
@@ -41,6 +41,7 @@ class TemplateTests(unittest.TestCase):
     def test_runpod_template_matches_current_v2_shape(self):
         data = json.loads((ROOT / "runpod-template.json").read_text(encoding="utf-8"))
         self.assertEqual(data["image"], IMAGE)
+        self.assertEqual(data["allowedCudaVersions"], ["12.8"])
         self.assertEqual(data["ports"], ["7860/http"])
         self.assertEqual(data["disk"], 30)
         self.assertEqual(data["mounts"]["persistent"], {"size": 300, "path": "/workspace"})

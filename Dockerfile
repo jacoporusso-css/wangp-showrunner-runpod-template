@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM pytorch/pytorch:2.10.0-cuda13.0-cudnn9-runtime
+FROM runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404
 
 ARG WAN2GP_REPOSITORY=https://github.com/deepbeepmeep/Wan2GP.git
 ARG WAN2GP_COMMIT=9e25e36e50a073a99419d406d47c13088956f48c
@@ -41,9 +41,17 @@ RUN git clone --filter=blob:none "${WAN2GP_REPOSITORY}" "${WAN2GP_HOME}" \
 WORKDIR ${WAN2GP_HOME}
 
 # WanGP's pinned requirements own application versions such as Gradio 5.29.0.
-# Torch already comes from the CUDA 13 / Torch 2.10 base and is not replaced.
+# Keep the official RunPod CUDA 12.8 runtime, but upgrade the isolated app
+# environment to the Torch 2.10 family validated with this WanGP revision.
+RUN python - <<'PY'
+import sys
+assert sys.version_info[:2] == (3, 11), sys.version
+PY
 RUN python -m venv --system-site-packages "${VIRTUAL_ENV}" \
  && "${VIRTUAL_ENV}/bin/python" -m pip install --upgrade pip setuptools wheel \
+ && "${VIRTUAL_ENV}/bin/python" -m pip install \
+      torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0 \
+      --index-url https://download.pytorch.org/whl/cu128 \
  && "${VIRTUAL_ENV}/bin/python" -m pip install -r requirements.txt \
  && "${VIRTUAL_ENV}/bin/python" -m pip check \
  && "${VIRTUAL_ENV}/bin/python" - <<'PY'

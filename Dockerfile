@@ -16,6 +16,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     WAN2GP_HOME=/opt/Wan2GP \
     WAN2GP_PORT=7860 \
     PROJECT_ROOT=/workspace/lamba-video \
+    VIRTUAL_ENV=/opt/wan-venv \
     HF_HOME=/workspace/lamba-video/huggingface \
     HUGGINGFACE_HUB_CACHE=/workspace/lamba-video/huggingface/hub \
     TRANSFORMERS_CACHE=/workspace/lamba-video/huggingface/transformers \
@@ -28,7 +29,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       build-essential ca-certificates curl ffmpeg git git-lfs jq libgl1 libglib2.0-0 \
-      libsm6 libxext6 libxrender1 ninja-build pkg-config python3-dev tini \
+      libsm6 libxext6 libxrender1 ninja-build pkg-config python3-dev python3-venv tini \
  && git lfs install --system \
  && rm -rf /var/lib/apt/lists/*
 
@@ -41,15 +42,18 @@ WORKDIR ${WAN2GP_HOME}
 
 # WanGP's pinned requirements own application versions such as Gradio 5.29.0.
 # Torch already comes from the CUDA 13 / Torch 2.10 base and is not replaced.
-RUN python -m pip install --upgrade pip setuptools wheel \
- && python -m pip install -r requirements.txt \
- && python -m pip check \
- && python - <<'PY'
+RUN python -m venv --system-site-packages "${VIRTUAL_ENV}" \
+ && "${VIRTUAL_ENV}/bin/python" -m pip install --upgrade pip setuptools wheel \
+ && "${VIRTUAL_ENV}/bin/python" -m pip install -r requirements.txt \
+ && "${VIRTUAL_ENV}/bin/python" -m pip check \
+ && "${VIRTUAL_ENV}/bin/python" - <<'PY'
 import gradio, torch
 assert gradio.__version__ == "5.29.0", gradio.__version__
 assert torch.__version__.startswith("2.10.0"), torch.__version__
 print("torch", torch.__version__, "gradio", gradio.__version__)
 PY
+
+ENV PATH="/opt/wan-venv/bin:${PATH}"
 
 COPY entrypoint.sh /usr/local/bin/wangp-entrypoint
 COPY healthcheck.py /usr/local/bin/wangp-healthcheck

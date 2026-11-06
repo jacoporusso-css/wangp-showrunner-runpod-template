@@ -26,6 +26,7 @@ jobs:
       - name: Validate base image and pinned source
         run: |
           docker manifest inspect runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404 >/dev/null
+          docker manifest inspect ghcr.io/astral-sh/uv:0.9.5 >/dev/null
           git init -q /tmp/wan
           git -C /tmp/wan fetch --depth=1 https://github.com/deepbeepmeep/Wan2GP.git 9e25e36e50a073a99419d406d47c13088956f48c
           test "$(git -C /tmp/wan rev-parse FETCH_HEAD)" = 9e25e36e50a073a99419d406d47c13088956f48c

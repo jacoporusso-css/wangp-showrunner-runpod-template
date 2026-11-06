@@ -15,6 +15,8 @@ class TemplateTests(unittest.TestCase):
         text = (ROOT / "Dockerfile").read_text(encoding="utf-8")
         self.assertIn(f"ARG WAN2GP_COMMIT={PIN}", text)
         self.assertIn("runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404", text)
+        self.assertIn("ghcr.io/astral-sh/uv:0.9.5", text)
+        self.assertIn("uv python install 3.11.14", text)
         self.assertIn('assert gradio.__version__ == "5.29.0"', text)
         self.assertNotIn('ARG WAN2GP_COMMIT="main"', text)
         self.assertNotIn("gradio==4.44.1", text)
@@ -56,7 +58,10 @@ class TemplateTests(unittest.TestCase):
 
     def test_image_contains_no_project_assets(self):
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-        copied = re.findall(r"^COPY\s+([^\s]+)", dockerfile, flags=re.MULTILINE)
+        copied = []
+        for line in dockerfile.splitlines():
+            if line.startswith("COPY ") and "--from=" not in line:
+                copied.append(line.split()[1])
         self.assertEqual(copied, ["entrypoint.sh", "healthcheck.py"])
 
 

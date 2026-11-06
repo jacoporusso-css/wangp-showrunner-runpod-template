@@ -1,4 +1,6 @@
 # syntax=docker/dockerfile:1.7
+FROM ghcr.io/astral-sh/uv:0.9.5 AS uv
+
 FROM runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404
 
 ARG WAN2GP_REPOSITORY=https://github.com/deepbeepmeep/Wan2GP.git
@@ -17,6 +19,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     WAN2GP_PORT=7860 \
     PROJECT_ROOT=/workspace/lamba-video \
     VIRTUAL_ENV=/opt/wan-venv \
+    UV_PYTHON_INSTALL_DIR=/opt/uv-python \
     HF_HOME=/workspace/lamba-video/huggingface \
     HUGGINGFACE_HUB_CACHE=/workspace/lamba-video/huggingface/hub \
     TRANSFORMERS_CACHE=/workspace/lamba-video/huggingface/transformers \
@@ -29,7 +32,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       build-essential ca-certificates curl ffmpeg git git-lfs jq libgl1 libglib2.0-0 \
-      libsm6 libxext6 libxrender1 ninja-build pkg-config python3-dev python3-venv tini \
+      libsm6 libxext6 libxrender1 ninja-build pkg-config python3-dev tini \
  && git lfs install --system \
  && rm -rf /var/lib/apt/lists/*
 
@@ -40,15 +43,18 @@ RUN git clone --filter=blob:none "${WAN2GP_REPOSITORY}" "${WAN2GP_HOME}" \
 
 WORKDIR ${WAN2GP_HOME}
 
+COPY --from=uv /uv /uvx /usr/local/bin/
+
 # WanGP's pinned requirements own application versions such as Gradio 5.29.0.
 # Keep the official RunPod CUDA 12.8 runtime, but upgrade the isolated app
 # environment to the Torch 2.10 family validated with this WanGP revision.
-RUN python - <<'PY'
+RUN uv python install 3.11.14 \
+ && uv venv --seed --python 3.11.14 "${VIRTUAL_ENV}" \
+ && "${VIRTUAL_ENV}/bin/python" - <<'PY'
 import sys
 assert sys.version_info[:2] == (3, 11), sys.version
 PY
-RUN python -m venv --system-site-packages "${VIRTUAL_ENV}" \
- && "${VIRTUAL_ENV}/bin/python" -m pip install --upgrade pip setuptools wheel \
+RUN "${VIRTUAL_ENV}/bin/python" -m pip install --upgrade pip setuptools wheel \
  && "${VIRTUAL_ENV}/bin/python" -m pip install \
       torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0 \
       --index-url https://download.pytorch.org/whl/cu128 \

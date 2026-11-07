@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import re
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -25,6 +30,16 @@ class TemplateTests(unittest.TestCase):
         self.assertNotIn("JUPYTER", text)
         self.assertEqual(text.count("EXPOSE"), 1)
         self.assertIn("EXPOSE 7860", text)
+        self.assertIn("PUBLIC_MODEL_ROOT=/workspace/wangp-public-models", text)
+        self.assertIn("PROJECT_ROOT=/runpod-private/lamba-video", text)
+        self.assertIn("REQUIRE_NETWORK_VOLUME=1", text)
+        self.assertIn("HF_HOME=/runpod-private/lamba-video/cache/huggingface-home", text)
+        self.assertIn("HF_TOKEN_PATH=/runpod-private/lamba-video/config/huggingface/token", text)
+        self.assertIn("HUGGINGFACE_HUB_CACHE=/workspace/wangp-public-models/huggingface/hub", text)
+        self.assertIn("TORCH_HOME=/workspace/wangp-public-models/torch", text)
+        self.assertIn("XDG_CACHE_HOME=/runpod-private/lamba-video/cache/xdg", text)
+        self.assertIn("GRADIO_TEMP_DIR=/runpod-private/lamba-video/tmp/gradio", text)
+        self.assertIn("TMPDIR=/runpod-private/lamba-video/tmp", text)
 
     def test_entrypoint_has_security_and_persistence_controls(self):
         text = (ROOT / "entrypoint.sh").read_text(encoding="utf-8")
@@ -36,6 +51,26 @@ class TemplateTests(unittest.TestCase):
             '--deepy-sessions-dir "$PROJECT_ROOT/deepy_sessions"',
             '--workspaces-dir "$PROJECT_ROOT/workspaces"',
             f'EXPECTED_COMMIT="{PIN}"',
+            'mountpoint -q "$WORKSPACE_ROOT"',
+            '[[ "$(stat -c \'%d\' "$WORKSPACE_ROOT")" != "$(stat -c \'%d\' /)" ]]',
+            'path_contains "$WORKSPACE_ROOT" "$PUBLIC_MODEL_ROOT"',
+            'path_contains "$PRIVATE_BASE" "$PROJECT_ROOT"',
+            '[[ "$(stat -c \'%d\' "$PROJECT_ROOT")" == "$(stat -c \'%d\' /)" ]]',
+            'export HF_HOME="$PROJECT_ROOT/cache/huggingface-home"',
+            'export HUGGINGFACE_HUB_CACHE="$PUBLIC_MODEL_ROOT/huggingface/hub"',
+            'export TORCH_HOME="$PUBLIC_MODEL_ROOT/torch"',
+            'export XDG_CACHE_HOME="$PROJECT_ROOT/cache/xdg"',
+            'export TMPDIR="$PROJECT_ROOT/tmp"',
+            'PUBLIC_DIRS=(ckpts loras huggingface torch compute-cache)',
+            'Unexpected top-level path in PUBLIC_MODEL_ROOT',
+            'route_directory ckpts "$PUBLIC_MODEL_ROOT" ckpts',
+            'route_directory loras "$PUBLIC_MODEL_ROOT" loras',
+            'route_directory computecache "$PUBLIC_MODEL_ROOT" compute-cache',
+            'route_directory finetunes "$PROJECT_ROOT" finetunes',
+            'route_directory storage "$PROJECT_ROOT" storage',
+            'route_directory uploads "$PROJECT_ROOT" uploads',
+            'route_directory outputs "$PROJECT_ROOT" outputs/wangp',
+            'route_directory cache "$PROJECT_ROOT" cache/wangp',
         ):
             self.assertIn(required, text)
         self.assertNotIn("--no-auth", text)
@@ -47,8 +82,17 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(data["image"], IMAGE)
         self.assertEqual(data["allowedCudaVersions"], ["12.8"])
         self.assertEqual(data["ports"], ["7860/http"])
-        self.assertEqual(data["disk"], 30)
-        self.assertEqual(data["mounts"]["persistent"], {"size": 300, "path": "/workspace"})
+        self.assertEqual(data["disk"], 50)
+        self.assertNotIn("mounts", data)
+        self.assertEqual(
+            data["env"],
+            {
+                "WAN2GP_PORT": "7860",
+                "PUBLIC_MODEL_ROOT": "/workspace/wangp-public-models",
+                "PROJECT_ROOT": "/runpod-private/lamba-video",
+                "REQUIRE_NETWORK_VOLUME": "1",
+            },
+        )
         self.assertFalse(data["startJupyter"])
         self.assertFalse(data["startSsh"])
         self.assertFalse(data["serverless"])
@@ -71,7 +115,65 @@ class TemplateTests(unittest.TestCase):
         for line in dockerfile.splitlines():
             if line.startswith("COPY ") and "--from=" not in line:
                 copied.append(line.split()[1])
-        self.assertEqual(copied, ["entrypoint.sh", "healthcheck.py"])
+        self.assertEqual(copied, ["entrypoint.sh", "healthcheck.py", "public_cache_inventory.py"])
+
+    def test_public_cache_inventory_reports_only_relative_regular_files(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "ckpts").mkdir()
+            payload = b"public model bytes\n"
+            (root / "ckpts" / "model.bin").write_bytes(payload)
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "public_cache_inventory.py")],
+                env={**os.environ, "PUBLIC_MODEL_ROOT": str(root)},
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=True,
+            )
+        records = [json.loads(line) for line in result.stdout.splitlines()]
+        self.assertEqual(
+            records,
+            [
+                {
+                    "path": "ckpts/model.bin",
+                    "size": len(payload),
+                    "sha256": hashlib.sha256(payload).hexdigest(),
+                }
+            ],
+        )
+
+    def test_public_cache_inventory_rejects_symlink_escape(self):
+        with tempfile.TemporaryDirectory() as temp, tempfile.TemporaryDirectory() as outside:
+            root = Path(temp)
+            (root / "ckpts").mkdir()
+            target = Path(outside) / "private.bin"
+            target.write_bytes(b"private")
+            (root / "ckpts" / "escape.bin").symlink_to(target)
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "public_cache_inventory.py")],
+                env={**os.environ, "PUBLIC_MODEL_ROOT": str(root)},
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("non-regular file is not allowed", result.stderr)
+
+    def test_public_cache_inventory_rejects_unapproved_top_level_path(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "private-uploads").mkdir()
+            (root / "private-uploads" / "reference.jpg").write_bytes(b"private")
+            result = subprocess.run(
+                [sys.executable, str(ROOT / "public_cache_inventory.py")],
+                env={**os.environ, "PUBLIC_MODEL_ROOT": str(root)},
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("unexpected top-level public cache path", result.stderr)
 
 
 if __name__ == "__main__":

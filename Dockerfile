@@ -17,14 +17,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
     WAN2GP_HOME=/opt/Wan2GP \
     WAN2GP_PORT=7860 \
-    PROJECT_ROOT=/workspace/lamba-video \
     VIRTUAL_ENV=/opt/wan-venv \
     UV_PYTHON_INSTALL_DIR=/opt/uv-python \
-    HF_HOME=/workspace/lamba-video/huggingface \
-    HUGGINGFACE_HUB_CACHE=/workspace/lamba-video/huggingface/hub \
-    TRANSFORMERS_CACHE=/workspace/lamba-video/huggingface/transformers \
-    TORCH_HOME=/workspace/lamba-video/torch \
-    XDG_CACHE_HOME=/workspace/lamba-video/cache \
     GRADIO_ANALYTICS_ENABLED=False \
     HF_HUB_DISABLE_TELEMETRY=1 \
     DO_NOT_TRACK=1
@@ -34,6 +28,8 @@ RUN apt-get update \
       build-essential ca-certificates curl ffmpeg git git-lfs jq libgl1 libglib2.0-0 \
       libsm6 libxext6 libxrender1 ninja-build pkg-config python3-dev tini \
  && git lfs install --system \
+ && command -v mountpoint >/dev/null \
+ && command -v realpath >/dev/null \
  && rm -rf /var/lib/apt/lists/*
 
 RUN git clone --filter=blob:none "${WAN2GP_REPOSITORY}" "${WAN2GP_HOME}" \
@@ -89,12 +85,29 @@ assert torch.__version__.startswith("2.10.0"), torch.__version__
 print("torch", torch.__version__, "gradio", gradio.__version__, "decord", decord.__version__)
 PY
 
-ENV PATH="/opt/wan-venv/bin:${PATH}"
+ENV PATH="/opt/wan-venv/bin:${PATH}" \
+    PUBLIC_MODEL_ROOT=/workspace/wangp-public-models \
+    PROJECT_ROOT=/runpod-private/lamba-video \
+    REQUIRE_NETWORK_VOLUME=1 \
+    HF_HOME=/runpod-private/lamba-video/cache/huggingface-home \
+    HF_TOKEN_PATH=/runpod-private/lamba-video/config/huggingface/token \
+    HF_STORED_TOKENS_PATH=/runpod-private/lamba-video/config/huggingface/stored_tokens \
+    HUGGINGFACE_HUB_CACHE=/workspace/wangp-public-models/huggingface/hub \
+    TRANSFORMERS_CACHE=/workspace/wangp-public-models/huggingface/transformers \
+    HF_ASSETS_CACHE=/workspace/wangp-public-models/huggingface/assets \
+    TORCH_HOME=/workspace/wangp-public-models/torch \
+    XDG_CACHE_HOME=/runpod-private/lamba-video/cache/xdg \
+    GRADIO_TEMP_DIR=/runpod-private/lamba-video/tmp/gradio \
+    TMPDIR=/runpod-private/lamba-video/tmp \
+    TEMP=/runpod-private/lamba-video/tmp \
+    TMP=/runpod-private/lamba-video/tmp
 
 COPY entrypoint.sh /usr/local/bin/wangp-entrypoint
 COPY healthcheck.py /usr/local/bin/wangp-healthcheck
+COPY public_cache_inventory.py /usr/local/bin/wangp-public-cache-inventory
 RUN chmod 0755 /usr/local/bin/wangp-entrypoint /usr/local/bin/wangp-healthcheck \
- && mkdir -p /workspace/lamba-video
+      /usr/local/bin/wangp-public-cache-inventory \
+ && mkdir -p /runpod-private
 
 EXPOSE 7860
 

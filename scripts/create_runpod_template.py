@@ -80,6 +80,8 @@ def graphql_template_state(token: str, template_id: str) -> dict[str, Any]:
 
 def update_port_labels(token: str, template_id: str, labels: list[dict[str, str]]) -> None:
     state = graphql_template_state(token, template_id)
+    if state.get("volumeInGb") not in (None, 0) or state.get("volumeMountPath"):
+        raise RuntimeError("Template unexpectedly declares persistent storage; network-volume attachment must remain manual.")
     available = {
         str(item).split("/", 1)[0].strip()
         for item in (state.get("ports") if isinstance(state.get("ports"), list) else str(state.get("ports", "")).split(","))
@@ -145,12 +147,24 @@ def main() -> int:
     args = parser.parse_args()
     payload = json.loads(args.config.read_text(encoding="utf-8"))
     port_labels = json.loads(args.port_labels.read_text(encoding="utf-8"))
-    required = {"name", "image", "disk", "ports", "mounts"}
+    required = {"name", "image", "disk", "ports", "env"}
     missing = sorted(required - payload.keys())
     if missing:
         raise SystemExit("Missing template fields: " + ", ".join(missing))
     if payload["ports"] != ["7860/http"] or payload.get("startJupyter") or payload.get("startSsh"):
         raise SystemExit("Template must expose only 7860/http with Jupyter and automatic SSH disabled.")
+    if payload.get("disk") != 50:
+        raise SystemExit("Template must provide a 50 GB ephemeral container disk.")
+    if "mounts" in payload:
+        raise SystemExit("Template must not provision persistent storage; attach the network volume manually at deployment.")
+    expected_env = {
+        "WAN2GP_PORT": "7860",
+        "PUBLIC_MODEL_ROOT": "/workspace/wangp-public-models",
+        "PROJECT_ROOT": "/runpod-private/lamba-video",
+        "REQUIRE_NETWORK_VOLUME": "1",
+    }
+    if payload.get("env") != expected_env:
+        raise SystemExit("Template storage environment does not match the public-model-only architecture.")
     image = payload.get("image", "")
     if "@sha256:" not in image or image.endswith("@sha256:"):
         raise SystemExit("Template image must use an immutable sha256 digest reference.")
@@ -180,12 +194,16 @@ def main() -> int:
         template_id = result["id"]
         action = "created"
     verified = request("GET", f"/templates/{template_id}", token)
+    if verified.get("mounts"):
+        raise RuntimeError(f"Template unexpectedly has persistent mounts: {verified.get('mounts')!r}")
     for key in ("name", "image", "ports", "disk"):
         if verified.get(key) != payload.get(key):
             raise RuntimeError(f"Template read-back mismatch for {key}: {verified.get(key)!r}")
     update_port_labels(token, template_id, port_labels)
     verified_after_labels = request("GET", f"/templates/{template_id}", token)
-    for key in ("name", "image", "ports", "disk", "allowedCudaVersions", "mounts", "public", "serverless", "startJupyter", "startSsh"):
+    if verified_after_labels.get("mounts"):
+        raise RuntimeError(f"Port-label update introduced persistent mounts: {verified_after_labels.get('mounts')!r}")
+    for key in ("name", "image", "ports", "disk", "allowedCudaVersions", "env", "public", "serverless", "startJupyter", "startSsh"):
         if verified_after_labels.get(key) != payload.get(key):
             raise RuntimeError(f"Template changed during port-label update for {key}: {verified_after_labels.get(key)!r}")
     print(json.dumps({"action": action, "id": template_id, "name": verified["name"], "image": verified["image"]}, indent=2))

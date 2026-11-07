@@ -5,19 +5,15 @@
   "allowedCudaVersions": [
     "12.8"
   ],
-  "disk": 30,
+  "disk": 50,
   "ports": [
     "7860/http"
   ],
   "env": {
     "WAN2GP_PORT": "7860",
-    "PROJECT_ROOT": "/workspace/lamba-video"
-  },
-  "mounts": {
-    "persistent": {
-      "size": 300,
-      "path": "/workspace"
-    }
+    "PUBLIC_MODEL_ROOT": "/workspace/wangp-public-models",
+    "PROJECT_ROOT": "/runpod-private/lamba-video",
+    "REQUIRE_NETWORK_VOLUME": "1"
   },
   "serverless": false,
   "public": false,

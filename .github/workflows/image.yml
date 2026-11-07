@@ -22,7 +22,7 @@ jobs:
         run: |
           python3 -m unittest discover -s tests -v
           bash -n entrypoint.sh
-          python3 -m py_compile healthcheck.py tests/test_template.py
+          python3 -m py_compile healthcheck.py public_cache_inventory.py scripts/create_runpod_template.py tests/test_template.py
       - name: Validate base image and pinned source
         run: |
           docker manifest inspect runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404 >/dev/null

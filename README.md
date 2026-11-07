@@ -14,20 +14,34 @@ It packages the exact WanGP revision and launch policy. It contains no song, lyr
 - Required Gradio: `5.29.0`
 - Image: `ghcr.io/jacoporusso-css/wangp-showrunner-runpod:latest`
 - Immutable release tag: `ghcr.io/jacoporusso-css/wangp-showrunner-runpod:wan19.13-9e25e36`
-- Published OCI index digest: `sha256:d4406549bddb9978475a4f9d327e48417f33a307cd96d823431377b14f20a62e`
-- The RunPod template uses the digest reference, not a mutable tag.
+- Published OCI index digest for the previous image release: `sha256:d4406549bddb9978475a4f9d327e48417f33a307cd96d823431377b14f20a62e`
+- `runpod-template.json` retains that immutable digest until the changed image is built and published.
 
-## Security and persistence
+> **Deployment gate:** do not deploy this source revision with the retained digest. The digest predates the public-model-only entrypoint. After publication, replace it with the new `linux/amd64` OCI index digest and repeat the manifest, SBOM, provenance, and runtime checks.
+
+## Security and storage separation
 
 - WanGP always starts with `--auth`.
 - The exact RunPod HTTPS proxy origin is derived from `RUNPOD_POD_ID`.
 - Only port `7860/http` is declared.
 - Jupyter and automatic SSH are disabled in the RunPod template.
 - The image rejects arbitrary extra launch arguments.
-- Showrunner settings and productions persist under `/workspace/lamba-video/settings`.
-- Deepy sessions, workspaces, model caches and outputs persist below `/workspace/lamba-video`.
+- A manually selected 200 GB RunPod network volume must be mounted at `/workspace`.
+- The network volume contains public model material only, below `/workspace/wangp-public-models`.
+- Protected project data is ephemeral below `/runpod-private/lamba-video` on the 50 GB container disk.
+- The entrypoint fails closed unless `/workspace` is a mount point on a filesystem distinct from the container root.
+- It also rejects overlapping/nested roots, a public root outside `/workspace`, or a private root outside ephemeral container storage.
 - The entrypoint verifies the WanGP Git commit before launch.
 - No protected project asset is built into the image.
+
+Only these paths are routed to the public network volume:
+
+- WanGP public checkpoints and public accelerator LoRAs (`ckpts` and `loras`);
+- Hugging Face caches;
+- Torch cache;
+- WanGP compute cache.
+
+Settings, config, finetune definitions, Showrunner/Deepy sessions, workspaces, uploads, logs, storage, Gradio and mask outputs, general outputs, temporary media, Hugging Face credentials/home state, WanGP cache, XDG cache, and all other project data remain below `/runpod-private/lamba-video`. Retrieve and verify protected outputs before terminating the Pod; the private tree is intentionally destroyed with the container disk.
 
 If `WANGP_AUTH_PASSWORD` is absent, WanGP generates a passphrase and reports it in the Pod log. Store it directly in a password manager; do not put it in template environment variables, chat, repository files or shell history.
 
@@ -54,8 +68,9 @@ Verified publication for commit `a90202216324f19663e55a1ddd2aaa6f31de7316`:
 `runpod-template.json` matches the RunPod v2 template schema and specifies:
 
 - NVIDIA Pod template;
-- 30 GB ephemeral container disk;
-- 300 GB persistent mount at `/workspace`;
+- 50 GB ephemeral container disk for private project data;
+- no persistent mount declaration (network-volume selection is a manual paid deployment gate);
+- storage guards requiring a separately attached volume at `/workspace`;
 - `7860/http` only;
 - dashboard port label `WanGP Web UI` for port 7860;
 - Jupyter off;
@@ -82,16 +97,34 @@ The resulting RunPod template is the one-click deployment preset. The user must 
 - On-Demand rather than Spot;
 - an approved 48 GB GPU;
 - current price and budget;
-- intended region/host and storage policy;
+- intended region/host;
+- an existing or newly created 200 GB network volume mounted at `/workspace`;
+- that the network volume will contain public model weights/caches only;
 - final Deploy action.
 
 This manual confirmation is intentional because deployment starts a paid resource and determines the actual cloud tier.
 
-## After the Pod is ready
+## First paid run: warm the public model cache
 
-1. Read the generated WanGP passphrase from RunPod logs and store it in a password manager.
-2. Open the `7860` HTTP service and authenticate.
-3. Run the local supported API bootstrap from the project:
+The first Pod may be used only to populate the public model cache. Do not upload the song or protected references during this run.
+
+1. Confirm the Pod log reports `/workspace/wangp-public-models` as the public cache and `/runpod-private/lamba-video` as the ephemeral private root. A missing or unsafe mount causes startup to stop.
+2. Read the generated WanGP passphrase from RunPod logs and store it in a password manager.
+3. Open the `7860` HTTP service and authenticate.
+4. In **Configuration → General → Manage Models & Disk Space** (`Alt+M`), confirm the model directories resolve below the public cache and monitor disk use.
+5. Configure Deepy Prime and exercise only non-sensitive smoke generations needed to load the production model families: Qwen Image 2.1 Turbo, MiniMax H3 FL2VA Pruned PDD, MiniMax H3 Ref2VA Pruned PDD, and the Ref2VA Lightx2v sound template. Use synthetic prompts and generated/non-sensitive references only.
+6. Wait for every download to complete; do not stop or restart during an active model transfer.
+7. Optionally run `wangp-public-cache-inventory` from the Pod console and save the JSONL inventory into the ephemeral private root before downloading it locally.
+8. Terminate the Pod rather than retaining its ephemeral disk. Keep the separately managed network volume.
+
+A later Pod in the same RunPod datacenter can attach the existing network volume and reuse the cache. It will still pull/unpack the application image, but it should not re-download model files already present and valid.
+
+## Production run after cache warming
+
+1. Attach the existing 200 GB network volume at `/workspace`.
+2. Confirm the two storage roots in the Pod log.
+3. Authenticate to WanGP.
+4. Run the local supported API bootstrap from the project:
 
 ```bash
 cd /home/jacopo/ai-music-video-wangp
@@ -110,13 +143,22 @@ $TOOL showrunner \
 
 The bootstrap prompts for the passphrase without echo and uploads only SHA-256-verified working copies.
 
+To inventory what is retained on the public cache, run this inside the Pod:
+
+```bash
+wangp-public-cache-inventory > /runpod-private/lamba-video/public-cache-inventory.jsonl
+```
+
+Each JSONL record contains only a path relative to `PUBLIC_MODEL_ROOT`, byte size, and SHA-256. The tool discovers actual regular files at runtime; it does not preload a model list and refuses symlinks or other non-regular files.
+
 ## Local verification
 
 ```bash
 python3 -m unittest discover -s tests -v
 bash -n entrypoint.sh
-python3 -m py_compile healthcheck.py scripts/create_runpod_template.py tests/test_template.py
+python3 -m py_compile healthcheck.py public_cache_inventory.py scripts/create_runpod_template.py tests/test_template.py
 python3 scripts/create_runpod_template.py --check
+git diff --check
 ```
 
 A full runtime acceptance additionally requires the published image to start on an approved RunPod Secure Cloud GPU, pass its container health check, expose the authenticated UI, and display the required Showrunner/Qwen/MiniMax templates.

@@ -108,6 +108,9 @@ class TemplateTests(unittest.TestCase):
         self.assertIn("portsConfig", helper)
         self.assertIn("saveTemplate", helper)
         self.assertIn("Port-label read-back mismatch", helper)
+        self.assertIn('"volumeInGb": 0', helper)
+        self.assertIn("Persistent template storage size was not cleared", helper)
+        self.assertNotIn('(\"volumeMountPath\", \"volumeMountPath\")', helper)
 
     def test_image_contains_no_project_assets(self):
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")

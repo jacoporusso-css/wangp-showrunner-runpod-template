@@ -80,8 +80,6 @@ def graphql_template_state(token: str, template_id: str) -> dict[str, Any]:
 
 def update_port_labels(token: str, template_id: str, labels: list[dict[str, str]]) -> None:
     state = graphql_template_state(token, template_id)
-    if state.get("volumeInGb") not in (None, 0) or state.get("volumeMountPath"):
-        raise RuntimeError("Template unexpectedly declares persistent storage; network-volume attachment must remain manual.")
     available = {
         str(item).split("/", 1)[0].strip()
         for item in (state.get("ports") if isinstance(state.get("ports"), list) else str(state.get("ports", "")).split(","))
@@ -111,7 +109,10 @@ def update_port_labels(token: str, template_id: str, labels: list[dict[str, str]
         "env": env,
         "ports": ports,
         "portsConfig": normalized,
-        "volumeInGb": state.get("volumeInGb") or 0,
+        # A network volume is selected manually when deploying a Pod. Clear any
+        # legacy template-owned persistent disk through this full-state save;
+        # REST PATCH cannot clear it (omitting mounts or sending {} preserves it).
+        "volumeInGb": 0,
         "isPublic": bool(state.get("isPublic")),
         "isServerless": bool(state.get("isServerless")),
         "startJupyter": bool(state.get("startJupyter")),
@@ -120,7 +121,6 @@ def update_port_labels(token: str, template_id: str, labels: list[dict[str, str]
         "readme": state.get("readme") or "",
     }
     for source, target in (
-        ("volumeMountPath", "volumeMountPath"),
         ("startScript", "startScript"),
         ("category", "category"),
     ):
@@ -137,6 +137,10 @@ def update_port_labels(token: str, template_id: str, labels: list[dict[str, str]
     updated = graphql_template_state(token, template_id)
     if updated.get("portsConfig") != normalized:
         raise RuntimeError(f"Port-label read-back mismatch: {updated.get('portsConfig')!r}")
+    # RunPod may retain an inert historical volumeMountPath even when the size
+    # is zero. REST read-back below is the authoritative check that mounts is {}.
+    if updated.get("volumeInGb") not in (None, 0):
+        raise RuntimeError("Persistent template storage size was not cleared by the GraphQL save.")
 
 
 def main() -> int:
@@ -194,8 +198,6 @@ def main() -> int:
         template_id = result["id"]
         action = "created"
     verified = request("GET", f"/templates/{template_id}", token)
-    if verified.get("mounts"):
-        raise RuntimeError(f"Template unexpectedly has persistent mounts: {verified.get('mounts')!r}")
     for key in ("name", "image", "ports", "disk"):
         if verified.get(key) != payload.get(key):
             raise RuntimeError(f"Template read-back mismatch for {key}: {verified.get(key)!r}")

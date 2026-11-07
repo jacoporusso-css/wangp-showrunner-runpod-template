@@ -58,6 +58,13 @@ class TemplateTests(unittest.TestCase):
             self.assertFalse(re.search(r"PASSWORD|TOKEN|SECRET|KEY", key, re.I), key)
             self.assertNotEqual(value, "[REDACTED]")
 
+        labels = json.loads((ROOT / "runpod-port-labels.json").read_text(encoding="utf-8"))
+        self.assertEqual(labels, [{"port": "7860", "name": "WanGP Web UI"}])
+        helper = (ROOT / "scripts" / "create_runpod_template.py").read_text(encoding="utf-8")
+        self.assertIn("portsConfig", helper)
+        self.assertIn("saveTemplate", helper)
+        self.assertIn("Port-label read-back mismatch", helper)
+
     def test_image_contains_no_project_assets(self):
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
         copied = []

@@ -57,6 +57,7 @@ Verified publication for commit `a90202216324f19663e55a1ddd2aaa6f31de7316`:
 - 30 GB ephemeral container disk;
 - 300 GB persistent mount at `/workspace`;
 - `7860/http` only;
+- dashboard port label `WanGP Web UI` for port 7860;
 - Jupyter off;
 - automatic SSH off;
 - no secret environment variables;
@@ -71,7 +72,7 @@ python3 scripts/create_runpod_template.py --check
 python3 scripts/create_runpod_template.py
 ```
 
-The helper is idempotent by exact template name and verifies the resource after create/update. It never calls a Pod creation or state-transition endpoint.
+The helper is idempotent by exact template name and verifies the resource after create/update. RunPod REST v2 does not expose dashboard port labels, so the helper performs the same follow-up GraphQL `saveTemplate` operation used by the official `runpodctl` client, then reads back both the label and all security-critical REST fields. It never calls a Pod creation or state-transition endpoint.
 
 ## Deployment boundary
 

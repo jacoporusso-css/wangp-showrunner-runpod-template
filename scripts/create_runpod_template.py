@@ -174,8 +174,8 @@ def main() -> int:
         raise SystemExit("Template image must use an immutable sha256 digest reference.")
     if payload.get("public") is not False or payload.get("serverless") is not False:
         raise SystemExit("Template must remain private and Pod-only (serverless=false).")
-    if payload.get("allowedCudaVersions") != ["12.8"]:
-        raise SystemExit("Template must remain pinned to CUDA 12.8 compatibility.")
+    if payload.get("allowedCudaVersions") != ["12.8", "13.2"]:
+        raise SystemExit("Template must allow the CUDA 12.8 image on 12.8 or newer 13.2 hosts.")
     if port_labels != [{"port": "7860", "name": "WanGP Web UI"}]:
         raise SystemExit("Port labels must name port 7860 as 'WanGP Web UI'.")
     if args.check:

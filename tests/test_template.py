@@ -80,7 +80,7 @@ class TemplateTests(unittest.TestCase):
     def test_runpod_template_matches_current_v2_shape(self):
         data = json.loads((ROOT / "runpod-template.json").read_text(encoding="utf-8"))
         self.assertEqual(data["image"], IMAGE)
-        self.assertEqual(data["allowedCudaVersions"], ["12.8"])
+        self.assertEqual(data["allowedCudaVersions"], ["12.8", "13.2"])
         self.assertEqual(data["ports"], ["7860/http"])
         self.assertEqual(data["disk"], 50)
         self.assertNotIn("mounts", data)

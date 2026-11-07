@@ -14,10 +14,8 @@ It packages the exact WanGP revision and launch policy. It contains no song, lyr
 - Required Gradio: `5.29.0`
 - Image: `ghcr.io/jacoporusso-css/wangp-showrunner-runpod:latest`
 - Immutable release tag: `ghcr.io/jacoporusso-css/wangp-showrunner-runpod:wan19.13-9e25e36`
-- Published OCI index digest for the previous image release: `sha256:d4406549bddb9978475a4f9d327e48417f33a307cd96d823431377b14f20a62e`
-- `runpod-template.json` retains that immutable digest until the changed image is built and published.
-
-> **Deployment gate:** do not deploy this source revision with the retained digest. The digest predates the public-model-only entrypoint. After publication, replace it with the new `linux/amd64` OCI index digest and repeat the manifest, SBOM, provenance, and runtime checks.
+- Current public-model-cache OCI index digest: `sha256:61562e7f7ebcadaef831948a6f091c6e2a64b4ee0fbcc53e5ad986130d25a172`
+- `runpod-template.json` uses that immutable digest, not a mutable tag.
 
 ## Security and storage separation
 
@@ -55,9 +53,9 @@ GitHub Actions runs static checks and publishes the image to GHCR on `main`. Tag
 
 The workflow publishes SBOM and provenance attestations. The package must be public for credential-free RunPod pulls; the image contains no private project data.
 
-Verified publication for commit `a90202216324f19663e55a1ddd2aaa6f31de7316`:
+Verified publication for storage-split commit `89569b05a4d52dfe3e564ffc4dec435b283de5c0`:
 
-- GitHub Actions run `42265611385`: successful;
+- GitHub Actions run `42382006291`: successful in `39m14s`;
 - anonymous GHCR manifest request: HTTP 200;
 - platform manifest: `linux/amd64`;
 - SPDX SBOM attestation: present;

@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PIN = "9e25e36e50a073a99419d406d47c13088956f48c"
-IMAGE = "ghcr.io/jacoporusso-css/wangp-showrunner-runpod@sha256:d4406549bddb9978475a4f9d327e48417f33a307cd96d823431377b14f20a62e"
+IMAGE = "ghcr.io/jacoporusso-css/wangp-showrunner-runpod@sha256:61562e7f7ebcadaef831948a6f091c6e2a64b4ee0fbcc53e5ad986130d25a172"
 
 
 class TemplateTests(unittest.TestCase):
